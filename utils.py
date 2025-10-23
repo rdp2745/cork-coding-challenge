@@ -28,13 +28,16 @@ def fetch_cves(vendor: str, product: str):
         date = cna.get("datePublic", "Unknown date")
 
         # Get the cvss and summary
-        cvss = 0.0
+        cvss = None
         metrics = cna.get("metrics", [])
         if metrics:
             for metric in metrics:
                 cvss_data = metric.get("cvssV3_1", metric.get("cvssV3_0", {}))
-                if cvss_data:
-                    cvss = float(cvss_data.get("baseScore", 0))
+                if cvss_data and "baseScore" in cvss_data:
+                    try:
+                        cvss = float(cvss_data["baseScore"])
+                    except (TypeError, ValueError):
+                        cvss = None
                     break
         # Create the dict entry
         cve_list.append({
@@ -80,9 +83,84 @@ def fetch_epss(cve_id: str):
     return float(score) if score else 0
 
 
+def calculate_severity(cvss: float, epss: float, in_kev: bool) -> str:
+    if cvss is None:
+        if epss >= 0.75:
+            return "Critical"
+        elif epss >= 0.4:
+            return "Accelerated"
+        else:
+            return "Routine"
+
+    if in_kev and (cvss >= 8 and epss >= 0.6):
+        return "Critical"
+    elif in_kev and (cvss >= 7 or epss >= 0.5):
+        return "Accelerated"
+    else:
+        return "Routine"
+
+
+def analyze_vendors(vendor_product_pairs):
+    """Run multiple vendors/products and average severity categories."""
+    kev_set = fetch_kev_catalog()
+    summary = []
+    i = 0
+
+    # Go through multiple vendors/products and total the category count of the severity function
+    for vendor, product in vendor_product_pairs:
+        i += 1
+        print(f"\nTesting {i}: {vendor} {product} ...")
+        cves = fetch_cves(vendor, product)
+
+        counts = {"Critical": 0, "Accelerated": 0, "Routine": 0}
+        total = 0
+
+        for cve in cves:
+            epss = fetch_epss(cve["id"])
+            in_kev = cve["id"] in kev_set
+            severity = calculate_severity(cve["cvss"], epss, in_kev)
+            counts[severity] += 1
+            total += 1
+
+        if total > 0:
+            summary.append({
+                "vendor": vendor,
+                "product": product,
+                "Critical": counts["Critical"],
+                "Accelerated": counts["Accelerated"],
+                "Routine": counts["Routine"],
+                "Total": total
+            })
+
+    # Compute averages
+    avg = {"Critical": 0, "Accelerated": 0, "Routine": 0}
+    if summary:
+        for s in summary:
+            for key in avg:
+                avg[key] += s[key] / len(summary)
+
+    total_avg = avg["Critical"] + avg["Accelerated"] + avg["Routine"]
+    for key, val in avg.items():
+        pct = (val / total_avg) * 100 if total_avg > 0 else 0
+        print(f"{key}: {val:.2f} ({pct:.1f}%)")
+
+    return summary, avg
+
+
 if __name__ == "__main__":
-    result = fetch_cves("Microsoft", "windows_10")
+    # result = fetch_cves("Microsoft", "windows_10")
     # result = fetch_epss("CVE-2022-48503")
     # result = fetch_kev_catalog()
-    print(result)
+    vendors_to_test = [
+        ("microsoft", "windows_10"),
+        ("adobe", "acrobat_reader"),
+        ("apple", "ios"),
+        ("google", "chrome"),
+        ("apache", "http_server"),
+        ("redhat", "enterprise_linux"),
+        ("cisco", "ios_xe"),
+        ("fortinet", "fortios"),
+        ("canonical", "ubuntu_linux")
+    ]
+    analyze_vendors(vendors_to_test)
 
