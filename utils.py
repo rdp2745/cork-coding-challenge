@@ -91,9 +91,9 @@ def fetch_epss(cve_id: str):
 
 def calculate_severity(cvss: float, epss: float, in_kev: bool) -> str:
     if cvss is None:
-        if epss >= 0.75:
+        if in_kev and epss >= 0.75:
             return "Critical"
-        elif epss >= 0.4:
+        elif in_kev and epss >= 0.4:
             return "Accelerated"
         else:
             return "Routine"
