@@ -1,5 +1,11 @@
 import requests
 
+# Global color codes for terminal output
+COLOR_RESET = "\033[0m"
+COLOR_RED = "\033[91m"
+COLOR_YELLOW = "\033[93m"
+COLOR_GREEN = "\033[92m"
+
 
 def fetch_cves(vendor: str, product: str):
     """
@@ -145,6 +151,18 @@ def analyze_vendors(vendor_product_pairs):
         print(f"{key}: {val:.2f} ({pct:.1f}%)")
 
     return summary, avg
+
+
+def colorize_severity(severity: str) -> str:
+    """Colorize severity string for terminal output."""
+    if severity == "Critical":
+        return f"{COLOR_RED}{severity}{COLOR_RESET}"
+    elif severity == "Accelerated":
+        return f"{COLOR_YELLOW}{severity}{COLOR_RESET}"
+    elif severity == "Routine":
+        return f"{COLOR_GREEN}{severity}{COLOR_RESET}"
+    else:
+        return severity
 
 
 if __name__ == "__main__":
